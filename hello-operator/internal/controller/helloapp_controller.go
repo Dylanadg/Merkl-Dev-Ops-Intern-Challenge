@@ -19,6 +19,10 @@ package controller
 import (
 	"context"
 
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,6 +40,7 @@ type HelloAppReconciler struct {
 // +kubebuilder:rbac:groups=apps.intern.dev,resources=helloapps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps.intern.dev,resources=helloapps/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps.intern.dev,resources=helloapps/finalizers,verbs=update
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -49,7 +54,68 @@ type HelloAppReconciler struct {
 func (r *HelloAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = logf.FromContext(ctx)
 
-	// TODO(user): your logic here
+	helloApp := &appsv1alpha1.HelloApp{}
+	if err := r.Get(ctx, req.NamespacedName, helloApp); err != nil {
+		if errors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+
+	existing := &appsv1.Deployment{}
+	err := r.Get(ctx, client.ObjectKey{Name: helloApp.Name, Namespace: helloApp.Namespace}, existing)
+
+	if errors.IsNotFound(err) {
+		dep := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      helloApp.Name,
+				Namespace: helloApp.Namespace,
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &helloApp.Spec.Replicas,
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"app": helloApp.Name},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{"app": helloApp.Name},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:    "busybox",
+								Image:   "busybox:1.36",
+								Command: []string{"sh", "-c", "echo $HELLO_MSG && sleep 3600"},
+								Env: []corev1.EnvVar{
+									{Name: "HELLO_MSG", Value: helloApp.Spec.Message},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		ctrl.SetControllerReference(helloApp, dep, r.Scheme)
+		return ctrl.Result{}, r.Create(ctx, dep)
+	}
+
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	existing.Spec.Replicas = &helloApp.Spec.Replicas
+	existing.Spec.Template.Spec.Containers[0].Env = []corev1.EnvVar{
+		{Name: "HELLO_MSG", Value: helloApp.Spec.Message},
+	}
+
+	if err := r.Update(ctx, existing); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	helloApp.Status.AvailableReplicas = existing.Status.AvailableReplicas
+	if err := r.Status().Update(ctx, helloApp); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -58,6 +124,7 @@ func (r *HelloAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 func (r *HelloAppReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&appsv1alpha1.HelloApp{}).
+		Owns(&appsv1.Deployment{}).
 		Named("helloapp").
 		Complete(r)
 }

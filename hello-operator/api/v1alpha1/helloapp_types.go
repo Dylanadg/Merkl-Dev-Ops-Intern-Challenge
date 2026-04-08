@@ -25,8 +25,8 @@ import (
 
 // HelloAppSpec defines the desired state of HelloApp.
 type HelloAppSpec struct {
-	Message string `json:"message"`
-	Replicas int32 `json:"replicas"`
+	Message  string `json:"message"`
+	Replicas int32  `json:"replicas"`
 }
 
 // HelloAppStatus defines the observed state of HelloApp.

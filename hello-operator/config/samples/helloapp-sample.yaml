@@ -1,0 +1,8 @@
+apiVersion: apps.intern.dev/v1alpha1
+kind: HelloApp
+metadata:
+  name: hello-sample
+  namespace: intern-assessment
+spec:
+  message: "Hello from my first operator!"
+  replicas: 2
