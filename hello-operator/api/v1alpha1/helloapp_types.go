@@ -25,17 +25,13 @@ import (
 
 // HelloAppSpec defines the desired state of HelloApp.
 type HelloAppSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of HelloApp. Edit helloapp_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Message string `json:"message"`
+	Replicas int32 `json:"replicas"`
 }
 
 // HelloAppStatus defines the observed state of HelloApp.
 type HelloAppStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	AvailableReplicas int32 `json:"availableReplicas"`
 }
 
 // +kubebuilder:object:root=true
